@@ -173,13 +173,13 @@ async function incomingData(event) {
 
         switch (state) {
             case 0:
-                if (val == 0xff) {
+                if (val == 0xf0) {
                     state = 1;
                 }
                 break;
 
             case 1:
-                if (val == 0xff) {
+                if (val == 0x0f) {
                     receivedData.length = 0;
                     receivedDataIndex = 0;
                     state = 2;
@@ -192,7 +192,7 @@ async function incomingData(event) {
             case 2:
                 receivedData[receivedDataIndex++] = val;
 
-                if (receivedData.length == 18) {
+                if (receivedData.length == 6) {
                     state = 0;
 
                     if (alg_mode == 1){
@@ -211,22 +211,22 @@ function parseRaw(data) {
     ppg = 0;
     ecg = 0;
 
-    ppg = data[3] << 16;
-    ppg |= data[4] << 8;
-    ppg |= data[5];
+    ppg = data[0] << 16;
+    ppg |= data[1] << 8;
+    ppg |= data[2];
 
-    ecg = data[6] << 16;
-    ecg |= data[7] << 8;
-    ecg |= data[8];
+    ecg = data[3] << 16;
+    ecg |= data[4] << 8;
+    ecg |= data[5];
 
-    if (data[6] > 128) {
+    if (data[3] > 128) {
         ecg -= Math.pow(2, 24);
     }
 
     //TODO Calculate checksum
 
     document.getElementById("log").value = "";
-    log('Packet: ' + data[2] + ', ECG: ' + ecg + ', PPG: ' + ppg);
+    log('ECG: ' + ecg + ', PPG: ' + ppg);
     dataLog = dataLog + ppg + ', ' + ecg + '\n';
 
     //interpolate(ppg, ecg);
