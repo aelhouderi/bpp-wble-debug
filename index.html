@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+
+	<meta charset="UTF-8">
+	<title>BP Patch v0.0.4</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="main.css">
+	<script type="text/javascript" src="./smoothie.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+	<script src="./index.js" defer></script>
+
+</head>
+
+<body onload="createTimeline();" onresize="adjust_width();" style="background-color: lightgrey;text-align: center">
+	<div id="stage" align='center' style="background-color: white;margin: auto; width: 90%;"></div>
+	<button class="button button1" type="button" onclick="ble_connect()">
+		Scan
+	</button>
+	<br />
+	<button class="button button2" type="button" onclick="bleDisconnect()">
+		Disconnect
+	</button>
+	<br />
+	<input id="savebutton" class="button button3" type="button" onclick="save('bp_patch.csv', dataLog);" value="Save">
+	</button>
+	<br />
+	<br />
+	<br />
+	<div id="settings" style="display:flex;justify-content: center; ">
+
+		<div style="padding: 5px;">
+			<label for="mode">Mode:</label>
+			<select name="mode" id="mode">
+				<option value="1">Raw</option>
+				<option value="0">Processed</option>
+			</select>
+		</div>
+		<br />
+		<div style="padding: 5px;">
+			<label for="gender">Gender:</label>
+			<select name="gender" id="gender">
+				<option value="1">Male</option>
+				<option value="0">Female</option>
+			</select>
+		</div>
+		<br />
+		<div style="padding: 5px;">
+			<label for="style">Style:</label>
+			<select name="style" id="style">
+				<option value="1">Sitting</option>
+				<option value="0">Laying</option>
+			</select>
+		</div>
+		<br />
+		<div style="padding: 5px;">
+			<label for="height">Height [cm]:</label>
+			<input type="text" id="height" name="height" style="width: 40px;" value="170"><br><br>
+		</div>
+		<br />
+		<div style="padding: 5px;">
+			<label for="weight">Weight [kg;optional]:</label>
+			<input type="text" id="weight" name="weight" style="width: 40px;" value="75"><br><br>
+		</div>
+		<br />
+		<div style="padding: 5px;">
+			<label for="age">Age [optional]:</label>
+			<input type="text" id="age" name="age" style="width: 40px;" value="51"><br><br>
+		</div>
+	</div>
+
+	<br />Log:<br />
+	<textarea id="log" rows="5" cols="50"></textarea>
+	<br /><br /><br />
+
+	<div id="chart-area" style="display:none;text-align: left;">
+		<br />PPG<br />
+		<canvas id="rawchart" width="1200" height="120"></canvas><br />
+
+		<hr />
+
+		<br />ECG<br />
+		<canvas id="ecgchart" width="1200" height="120"></canvas><br />
+	</div>
+	<div id="alg-chart-area" style="text-align: left;">
+		<br /><br />
+		<canvas id="algchart" width="1200" height="300" style="display:none;"></canvas><br />
+	</div>
+	<!-- <canvas id="bpchart" width="1200" height="300"></canvas><br /> -->
+</body>
+
+</html>
