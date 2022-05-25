@@ -238,16 +238,18 @@ function parseProcessed(data) {
     dbp = 0;
     rri = 0;
 
-    sbp = data[5];
-    dbp = data[8];
+    sbp = data[2];
+    dbp = data[5];
 
-    rri = data[12] | (data[11] << 8);
+    //rri = data[12] | (data[11] << 8);
 
     //TODO Calculate checksum
 
     document.getElementById("log").value = "";
-    log('SBP: ' + sbp + ', DBP: ' + dbp + ', RRI: ' + rri);
-    dataLog = dataLog + sbp + ', ' + dbp + ', ' + rri + '\n';
+    // log('SBP: ' + sbp + ', DBP: ' + dbp + ', RRI: ' + rri);
+    // dataLog = dataLog + sbp + ', ' + dbp + ', ' + rri + '\n';
+    log('SBP: ' + sbp + ', DBP: ' + dbp);
+    dataLog = dataLog + sbp + ', ' + dbp + '\n';
 
     graphProcessed(sbp, dbp);
 }
