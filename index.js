@@ -152,12 +152,15 @@ async function incomingData(event) {
     if (no_data_yet) {
 
         if (alg_mode == 1){
+            document.getElementById('algchart').style.display = "none";
             document.getElementById('chart-area').style = "display:inline;";
             raw_chart.start();
             ecg_chart.start();
         }
         else{
             //document.getElementById('alg-chart-area').style = "display:inline;";
+            document.getElementById('chart-area').style = "display:none;";
+            document.getElementById('spinner').style = "display:none;";
             document.getElementById('algchart').style.display = "";
         }
        
@@ -229,17 +232,22 @@ function parseRaw(data) {
     log('ECG: ' + ecg + ', PPG: ' + ppg);
     dataLog = dataLog + ppg + ', ' + ecg + '\n';
 
-    //interpolate(ppg, ecg);
     graphRaw(ppg, ecg);
 }
 
 function parseProcessed(data) {
+    var time = new Date();
+    var time = formatDate(new Date(), "yyyy/MM/dd HH:mm:ss");
+
     sbp = 0;
     dbp = 0;
     rri = 0;
 
-    sbp = data[2];
-    dbp = data[5];
+    sbpAvg = get_avg_SBP(data[2]);
+    dbpAvg = get_avg_DBP(data[5]);
+
+    sbp = sbpAvg.avg;
+    dbp = dbpAvg.avg;
 
     //rri = data[12] | (data[11] << 8);
 
@@ -249,7 +257,7 @@ function parseProcessed(data) {
     // log('SBP: ' + sbp + ', DBP: ' + dbp + ', RRI: ' + rri);
     // dataLog = dataLog + sbp + ', ' + dbp + ', ' + rri + '\n';
     log('SBP: ' + sbp + ', DBP: ' + dbp);
-    dataLog = dataLog + sbp + ', ' + dbp + '\n';
+    dataLog = dataLog + time + ',' + data[2] + ',' + data[5] + ',' + sbp + ',' + dbp + '\n';
 
     graphProcessed(sbp, dbp);
 }
@@ -311,6 +319,14 @@ async function ble_connect() {
         await flowcontrolChar.startNotifications();
         flowcontrolChar.addEventListener('characteristicvaluechanged', incomingData);
         log('Ready to communicate!\n');
+
+        if (alg_mode == 0) {
+            document.getElementById('spinner').style = "display:flex;";
+            log('Calculating Blood Pressure...\n');
+        }
+        else {
+            log('Acquiring Raw Data...\n');
+        }
     }
     catch (error) {
         log('Failed: ' + error);
@@ -407,11 +423,27 @@ function interpolate(val_ppg, val_ecg) {
 }
 
 function save(filename, data) {
+    
+    if (alg_mode == 1) {
+        filename += '_raw_';
+    }
+    else {
+        filename += '_processed_';
+    }
+    filename += formatDate(new Date(), "yyyyMMdd_HHmmss");
+    filename += '.csv';
     if (document.getElementById('savebutton').value == 'Save') {
         document.getElementById('savebutton').value = 'Saving';
         document.getElementById("savebutton").classList.remove('button3');
         document.getElementById("savebutton").classList.add('button3_on');
         dataLog = "";
+
+        if (alg_mode == 1) {
+            dataLog = "ppg,ecg\n";
+        }
+        else {
+            dataLog = "time,sbp,dbp,sbp-avg,dbp-avg\n";
+        }
     }
     else {
         document.getElementById('savebutton').value = 'Save';
@@ -433,3 +465,213 @@ function save(filename, data) {
         }
     }
 }
+
+var DBP_AVGS = 4;
+var DBP_buffer = new Float32Array(DBP_AVGS);
+var DBP_int_buffer = new Int16Array(DBP_AVGS);
+var DBP_buffer_ind = 0;
+var num_DBPs = 0;
+function get_avg_DBP(new_DBP)
+{ //simple mean. Resets when passed a zero.
+	
+	var new_avg = 0;
+	var int_avg = 0;
+	var bits_of_prec = 12; //bits of precision
+	var rms = 0;
+	var new_ind;
+    var DBP_rms = 0;
+
+	if (new_DBP > 0)
+	{ //>0 valid, do average
+		num_DBPs++; //increment number to average
+		if (num_DBPs > DBP_AVGS) num_DBPs = DBP_AVGS; //truncate number of averages at max value
+		DBP_buffer[DBP_buffer_ind] = new_DBP; //load new sample into buffer
+		DBP_int_buffer[DBP_buffer_ind] = new_DBP * (2 ** bits_of_prec);
+		new_ind = DBP_buffer_ind; //get index of current latest sample
+
+		DBP_buffer_ind++; //increment buffer pointer for next time
+		if (DBP_buffer_ind == DBP_AVGS)
+			DBP_buffer_ind = 0; //loop back
+
+		for (var n = 0; n < num_DBPs; n++)
+		{
+			new_avg += DBP_buffer[new_ind]; //add each previous PI value
+			int_avg += DBP_int_buffer[new_ind];
+			new_ind--; //decrement pointer
+			if (new_ind < 0)
+				new_ind += DBP_AVGS; //loop back
+		}
+		new_avg /= num_DBPs;
+		int_avg /= num_DBPs;
+		new_ind = DBP_buffer_ind - 1;
+		if (new_ind < 0)
+			new_ind += DBP_AVGS; //loop back
+		for (var n = 0; n < num_DBPs; n++)
+		{
+			rms += ((DBP_int_buffer[new_ind] - int_avg)
+					* (DBP_int_buffer[new_ind] - int_avg));
+			new_ind--;
+			if (new_ind < 0)
+				new_ind += DBP_AVGS;
+		}
+		rms /= num_DBPs; //divide by number of samples
+		rms = Math.sqrt(rms); //square root
+		DBP_rms = rms * (2 ** (-bits_of_prec)); //convert back to float
+	}
+	else
+	{ //reset
+		new_avg = new_DBP;
+		num_DBPs = 0;
+		DBP_buffer_ind = 0;
+		DBP_rms = 0;
+	}
+
+	return {
+        'avg': Math.round(new_avg),
+        'rms': DBP_rms
+    };
+}
+
+var SBP_AVGS = 4;
+var SBP_buffer = new Float32Array(SBP_AVGS);
+var SBP_int_buffer = new Int16Array(SBP_AVGS);
+var SBP_buffer_ind = 0;
+var num_SBPs = 0;
+function get_avg_SBP(new_SBP) { //simple mean. Resets when passed a zero.
+
+    var new_avg = 0;
+    var int_avg = 0;
+    var bits_of_prec = 12; //bits of precision
+    var rms = 0;
+    var new_ind;
+    var SBP_rms = 0;
+
+    if (new_SBP > 0) { //>0 valid, do average
+        num_SBPs++; //increment number to average
+        if (num_SBPs > SBP_AVGS) num_SBPs = SBP_AVGS; //truncate number of averages at max value
+        SBP_buffer[SBP_buffer_ind] = new_SBP; //load new sample into buffer
+        SBP_int_buffer[SBP_buffer_ind] = new_SBP * (2 ** bits_of_prec);
+        new_ind = SBP_buffer_ind; //get index of current latest sample
+
+        SBP_buffer_ind++; //increment buffer pointer for next time
+        if (SBP_buffer_ind == SBP_AVGS)
+            SBP_buffer_ind = 0; //loop back
+
+        for (var n = 0; n < num_SBPs; n++) {
+            new_avg += SBP_buffer[new_ind]; //add each previous PI value
+            int_avg += SBP_int_buffer[new_ind];
+            new_ind--; //decrement pointer
+            if (new_ind < 0)
+                new_ind += SBP_AVGS; //loop back
+        }
+        new_avg /= num_SBPs;
+        int_avg /= num_SBPs;
+        new_ind = SBP_buffer_ind - 1;
+        if (new_ind < 0)
+            new_ind += SBP_AVGS; //loop back
+        for (var n = 0; n < num_SBPs; n++) {
+            rms += ((SBP_int_buffer[new_ind] - int_avg)
+                * (SBP_int_buffer[new_ind] - int_avg));
+            new_ind--;
+            if (new_ind < 0)
+                new_ind += SBP_AVGS;
+        }
+        rms /= num_SBPs; //divide by number of samples
+        rms = Math.sqrt(rms); //square root
+        SBP_rms = rms * (2 ** (-bits_of_prec)); //convert back to float
+    }
+    else { //reset
+        new_avg = new_SBP;
+        num_SBPs = 0;
+        SBP_buffer_ind = 0;
+        SBP_rms = 0;
+    }
+
+    return {
+        'avg': Math.round(new_avg),
+        'rms': SBP_rms
+    };
+}
+
+function formatDate(date, format, utc) {
+    var MMMM = ["\x00", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    var MMM = ["\x01", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var dddd = ["\x02", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    var ddd = ["\x03", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    function ii(i, len) {
+        var s = i + "";
+        len = len || 2;
+        while (s.length < len) s = "0" + s;
+        return s;
+    }
+
+    var y = utc ? date.getUTCFullYear() : date.getFullYear();
+    format = format.replace(/(^|[^\\])yyyy+/g, "$1" + y);
+    format = format.replace(/(^|[^\\])yy/g, "$1" + y.toString().substr(2, 2));
+    format = format.replace(/(^|[^\\])y/g, "$1" + y);
+
+    var M = (utc ? date.getUTCMonth() : date.getMonth()) + 1;
+    format = format.replace(/(^|[^\\])MMMM+/g, "$1" + MMMM[0]);
+    format = format.replace(/(^|[^\\])MMM/g, "$1" + MMM[0]);
+    format = format.replace(/(^|[^\\])MM/g, "$1" + ii(M));
+    format = format.replace(/(^|[^\\])M/g, "$1" + M);
+
+    var d = utc ? date.getUTCDate() : date.getDate();
+    format = format.replace(/(^|[^\\])dddd+/g, "$1" + dddd[0]);
+    format = format.replace(/(^|[^\\])ddd/g, "$1" + ddd[0]);
+    format = format.replace(/(^|[^\\])dd/g, "$1" + ii(d));
+    format = format.replace(/(^|[^\\])d/g, "$1" + d);
+
+    var H = utc ? date.getUTCHours() : date.getHours();
+    format = format.replace(/(^|[^\\])HH+/g, "$1" + ii(H));
+    format = format.replace(/(^|[^\\])H/g, "$1" + H);
+
+    var h = H > 12 ? H - 12 : H == 0 ? 12 : H;
+    format = format.replace(/(^|[^\\])hh+/g, "$1" + ii(h));
+    format = format.replace(/(^|[^\\])h/g, "$1" + h);
+
+    var m = utc ? date.getUTCMinutes() : date.getMinutes();
+    format = format.replace(/(^|[^\\])mm+/g, "$1" + ii(m));
+    format = format.replace(/(^|[^\\])m/g, "$1" + m);
+
+    var s = utc ? date.getUTCSeconds() : date.getSeconds();
+    format = format.replace(/(^|[^\\])ss+/g, "$1" + ii(s));
+    format = format.replace(/(^|[^\\])s/g, "$1" + s);
+
+    var f = utc ? date.getUTCMilliseconds() : date.getMilliseconds();
+    format = format.replace(/(^|[^\\])fff+/g, "$1" + ii(f, 3));
+    f = Math.round(f / 10);
+    format = format.replace(/(^|[^\\])ff/g, "$1" + ii(f));
+    f = Math.round(f / 10);
+    format = format.replace(/(^|[^\\])f/g, "$1" + f);
+
+    var T = H < 12 ? "AM" : "PM";
+    format = format.replace(/(^|[^\\])TT+/g, "$1" + T);
+    format = format.replace(/(^|[^\\])T/g, "$1" + T.charAt(0));
+
+    var t = T.toLowerCase();
+    format = format.replace(/(^|[^\\])tt+/g, "$1" + t);
+    format = format.replace(/(^|[^\\])t/g, "$1" + t.charAt(0));
+
+    var tz = -date.getTimezoneOffset();
+    var K = utc || !tz ? "Z" : tz > 0 ? "+" : "-";
+    if (!utc) {
+        tz = Math.abs(tz);
+        var tzHrs = Math.floor(tz / 60);
+        var tzMin = tz % 60;
+        K += ii(tzHrs) + ":" + ii(tzMin);
+    }
+    format = format.replace(/(^|[^\\])K/g, "$1" + K);
+
+    var day = (utc ? date.getUTCDay() : date.getDay()) + 1;
+    format = format.replace(new RegExp(dddd[0], "g"), dddd[day]);
+    format = format.replace(new RegExp(ddd[0], "g"), ddd[day]);
+
+    format = format.replace(new RegExp(MMMM[0], "g"), MMMM[M]);
+    format = format.replace(new RegExp(MMM[0], "g"), MMM[M]);
+
+    format = format.replace(/\\(.)/g, "$1");
+
+    return format;
+};

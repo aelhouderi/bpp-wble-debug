@@ -4,7 +4,7 @@
 <head>
 
 	<meta charset="UTF-8">
-	<title>BP Patch v0.0.4</title>
+	<title>BP Patch v0.0.5</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="main.css">
 	<script type="text/javascript" src="./smoothie.js"></script>
@@ -23,7 +23,7 @@
 		Disconnect
 	</button>
 	<br />
-	<input id="savebutton" class="button button3" type="button" onclick="save('bp_patch.csv', dataLog);" value="Save">
+	<input id="savebutton" class="button button3" type="button" onclick="save('bp_patch', dataLog);" value="Save">
 	</button>
 	<br />
 	<br />
@@ -87,6 +87,8 @@
 		<br /><br />
 		<canvas id="algchart" width="1200" height="300" style="display:none;"></canvas><br />
 	</div>
+
+	<div id="spinner" class="loader center" style="display:none;"></div>
 	<!-- <canvas id="bpchart" width="1200" height="300"></canvas><br /> -->
 </body>
 
